@@ -1,5 +1,5 @@
 import { debug, error } from '../utils/logger.js'
-import { textify } from '../utils/helper.js'
+import { textify, isValidUrl } from '../utils/helper.js'
 import axios from 'axios'
 import { DOMParser } from 'linkedom'
 
@@ -14,16 +14,16 @@ import {
 
 import { extractMetadata } from '../utils/metadata.js'
 
+const STOP_WORDS = 'thank you for reading'
+
 const cache = register('sactownsports-article', ARTICLE_CACHE_TTL)
 const DEFAULT_TIMEOUT = 2 * 6e4
 const SEPARATOR = '{{MULTIMEDIA}}'
-const STOP_WORDS = 'read more below'
 
 const parse = async (html) => {
   const doc = new DOMParser().parseFromString(html, 'text/html')
 
   const { url, title, description, image } = extractMetadata(doc)
-
   const textBlocks = []
   const mediaEmbeds = []
   let paragraphs = []
@@ -34,48 +34,72 @@ const parse = async (html) => {
       const tagName = node.nodeName
       const txt = node.textContent.trim()
 
-      // stop loop if txt contains any of the STOP_WORDS
       if (txt.toLowerCase().startsWith(STOP_WORDS)) {
         break
       }
 
       if (tagName === 'P') {
-        paragraphs.push(txt)
-      } else if (tagName === 'NOSCRIPT') { // get youtube embeds
-        if (paragraphs.length > 0) {
-          textBlocks.push(paragraphs.join(' '))
-          paragraphs = []
+        const lazyYoutubeDiv = node.querySelector('.perfmatters-lazy-youtube')
+        if (lazyYoutubeDiv) {
+          mediaEmbeds.push(lazyYoutubeDiv.innerHTML)
+          textBlocks.push(SEPARATOR)
+          continue
         }
-        mediaEmbeds.push(node.innerHTML)
-        textBlocks.push(SEPARATOR)
+        paragraphs.push(txt)
+      } else if (tagName === 'BLOCKQUOTE') {
+        processBlockquote({ node, paragraphs, textBlocks, mediaEmbeds })
       }
     }
   }
 
   if (paragraphs.length > 0) {
     textBlocks.push(paragraphs.join(' '))
-    paragraphs = []
   }
-  const text = textBlocks.filter(x => x !== SEPARATOR).map(line => line.trim()).join(' ')
 
-  const content = textBlocks.map((block) => {
+  const text = textBlocks.filter(x => x !== SEPARATOR).map(line => line.trim()).join(' ')
+  const content = generateContent(textBlocks, mediaEmbeds)
+
+  const summary = generateSummary(description, text)
+
+  return {
+    link: url.trim(),
+    title: title.trim(),
+    image: image.trim(),
+    summary,
+    content,
+  }
+}
+
+const processBlockquote = ({ node, paragraphs, textBlocks, mediaEmbeds }) => {
+  node.querySelectorAll('a').forEach((atag) => {
+    const href = atag.getAttribute('href')
+    if (href && href.includes('/status/')) {
+      const mediaLink = href.split('?ref_src=')[0]
+      if (paragraphs.length > 0) {
+        textBlocks.push(paragraphs.join(' '))
+        paragraphs = []
+      }
+      if (isValidUrl(href)) {
+        mediaEmbeds.push(mediaLink)
+        textBlocks.push(SEPARATOR)
+      }
+    }
+  })
+}
+
+const generateContent = (textBlocks, mediaEmbeds) => {
+  return textBlocks.map((block) => {
     return block === SEPARATOR
       ? `<p class="media">${mediaEmbeds.shift()}</p>`
       : `<p class="text">${block.trim()}</p>`
   }).join('\n')
+}
 
+const generateSummary = (description, text) => {
   const desLen = description.length
-  const summary = desLen > ARTICLE_SUMMARY_MIN && desLen < ARTICLE_SUMMARY_MAX
-    ? description.trim() : textify(text, ARTICLE_SUMMARY_MAX).replace(/\n/g, ' ')
-
-  return {
-    url,
-    title,
-    description,
-    image,
-    summary,
-    content,
-  }
+  return desLen > ARTICLE_SUMMARY_MIN && desLen < ARTICLE_SUMMARY_MAX
+    ? description.trim()
+    : textify(text, ARTICLE_SUMMARY_MAX).replace(/\n/g, ' ')
 }
 
 export const extract = async (url) => {
