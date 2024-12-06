@@ -6,6 +6,10 @@ import {
   extractArticle as extractSicomArticle
 } from './handlers/sicom.js'
 
+import {
+  extractArticle as extractSactownsportsArticle
+} from './handlers/sactownsports.js'
+
 import { verify } from './utils/auth.js'
 
 import { debug, error } from './utils/logger.js'
@@ -29,6 +33,7 @@ server.all('/api/health', (req, res) => {
 })
 
 server.get('/api/sicom/article', verify, extractSicomArticle)
+server.get('/api/sactownsports/article', verify, extractSactownsportsArticle)
 
 server.all('/', (req, res) => {
   debug(`Default: ${req.method} ${req.path}`)

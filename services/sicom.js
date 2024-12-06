@@ -9,6 +9,8 @@ import { isValidUrl, textify } from '../utils/helper.js'
 
 import { debug, error } from '../utils/logger.js'
 
+import { extractMetadata } from '../utils/metadata.js'
+
 import {
   USER_AGENT,
   ARTICLE_CACHE_TTL,
@@ -35,17 +37,7 @@ const blocking = [
 const parse = async (html) => {
   const doc = new DOMParser().parseFromString(html.trim(), 'text/html')
 
-  const metaUrl = doc.querySelector('meta[property="og:url"]')
-  const url = metaUrl ? metaUrl.getAttribute('content') : ''
-
-  const metaTitle = doc.querySelector('meta[property="og:title"]')
-  const title = metaTitle ? metaTitle.getAttribute('content') : ''
-
-  const metaDesc = doc.querySelector('meta[property="og:description"]')
-  const description = metaDesc ? metaDesc.getAttribute('content') : ''
-
-  const metaImage = doc.querySelector('meta[property="og:image"]')
-  const image = metaImage ? metaImage.getAttribute('content') : ''
+  const { url, title, description, image } = extractMetadata(doc)
 
   const textBlocks = []
   const mediaEmbeds = []
