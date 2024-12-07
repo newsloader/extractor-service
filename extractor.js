@@ -5,6 +5,9 @@ import HyperExpress from 'hyper-express'
 import {
   extractArticle as extractSicomArticle
 } from './handlers/sicom.js'
+import {
+  extractArticle as extractHailfloridahailArticle
+} from './handlers/hailfloridahailcom.js'
 
 import {
   extractArticle as extractSactownsportsArticle
@@ -34,6 +37,7 @@ server.all('/api/health', (req, res) => {
 
 server.get('/api/sicom/article', verify, extractSicomArticle)
 server.get('/api/sactownsports/article', verify, extractSactownsportsArticle)
+server.get('/api/hailfloridahail/article', verify, extractHailfloridahailArticle)
 
 server.all('/', (req, res) => {
   debug(`Default: ${req.method} ${req.path}`)
