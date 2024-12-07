@@ -10,7 +10,7 @@
   "type": "module",
   "scripts": {
     "start": "ENV=live node ./extractor.js",
-    "dev": "ENV=dev node ./extractor.js",
+    "dev": "ENV=dev nodemon ./extractor.js",
     "lint": "eslint .",
     "lint:fix": "eslint --fix ."
   },
@@ -20,6 +20,7 @@
     "hyper-express": "^6.17.2",
     "ioredis": "^5.4.1",
     "linkedom": "^0.18.5",
+    "nodemon": "^3.1.7",
     "nonalog": "^1.1.0"
   },
   "devDependencies": {
