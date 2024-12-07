@@ -14,7 +14,15 @@ import {
 
 import { extractMetadata } from '../utils/metadata.js'
 
-const STOP_WORDS = 'thank you for reading'
+const BLOCK_WORDS = [
+  'thank you for reading',
+  '–field level',
+  'the full interview',
+  'follow @',
+  'full interview',
+  'click here for',
+  'sactown sports',
+]
 
 const cache = register('sactownsports-article', ARTICLE_CACHE_TTL)
 const DEFAULT_TIMEOUT = 2 * 6e4
@@ -34,20 +42,24 @@ const parse = async (html) => {
       const tagName = node.nodeName
       const txt = node.textContent.trim()
 
-      if (txt.toLowerCase().startsWith(STOP_WORDS)) {
-        break
+      if (BLOCK_WORDS.some(word => txt.toLowerCase().includes(word))) {
+        continue
       }
 
-      if (tagName === 'P') {
-        const lazyYoutubeDiv = node.querySelector('.perfmatters-lazy-youtube')
-        if (lazyYoutubeDiv) {
-          mediaEmbeds.push(lazyYoutubeDiv.innerHTML)
-          textBlocks.push(SEPARATOR)
-          continue
-        }
-        paragraphs.push(txt)
-      } else if (tagName === 'BLOCKQUOTE') {
-        processBlockquote({ node, paragraphs, textBlocks, mediaEmbeds })
+      switch (tagName) {
+        case 'P':
+        case 'UL':
+        case 'H3':
+          paragraphs.push(txt)
+          break
+        case 'BLOCKQUOTE':
+          paragraphs = processBlockquote({ node, paragraphs, textBlocks, mediaEmbeds })
+          break
+        case 'NOSCRIPT':
+          paragraphs = processNoscript({ node, paragraphs, textBlocks, mediaEmbeds })
+          break
+        default:
+          break
       }
     }
   }
@@ -85,6 +97,23 @@ const processBlockquote = ({ node, paragraphs, textBlocks, mediaEmbeds }) => {
       }
     }
   })
+  return paragraphs
+}
+
+const processNoscript = ({ node, paragraphs, textBlocks, mediaEmbeds }) => {
+  const mediaLink = node.querySelector('iframe')?.getAttribute('src')
+
+  if (mediaLink && mediaLink.includes('youtube.com')) {
+    if (paragraphs.length > 0) {
+      textBlocks.push(paragraphs.join(' '))
+      paragraphs = []
+    }
+    if (isValidUrl(mediaLink)) {
+      mediaEmbeds.push(mediaLink)
+      textBlocks.push(SEPARATOR)
+    }
+  }
+  return paragraphs
 }
 
 const generateContent = (textBlocks, mediaEmbeds) => {
