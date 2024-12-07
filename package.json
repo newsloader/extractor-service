@@ -17,7 +17,6 @@
   "dependencies": {
     "@ndaidong/bellajs": "^12.0.1",
     "axios": "^1.7.7",
-    "dotenv": "^16.4.7",
     "hyper-express": "^6.17.2",
     "ioredis": "^5.4.1",
     "linkedom": "^0.18.5",

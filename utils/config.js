@@ -1,7 +1,5 @@
 // config.js
 import { createRequire } from 'module'
-import dotenv from 'dotenv'
-dotenv.config()
 
 const require = createRequire(import.meta.url)
 export const {
@@ -11,6 +9,8 @@ export const {
 } = require('../package.json')
 
 const startAt = (new Date()).toISOString()
+
+process.loadEnvFile()
 
 const env = process.env || {}
 
