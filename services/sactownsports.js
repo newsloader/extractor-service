@@ -23,7 +23,7 @@ const BLOCK_WORDS = [
   'click here for',
   'sactown sports',
   'thank you for watching',
-  'Read more below',
+  'read more below',
 ]
 
 const NEEDED_WORDS = [

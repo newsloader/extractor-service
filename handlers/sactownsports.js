@@ -8,5 +8,6 @@ export const extractArticle = async (req, res) => {
   debug(`${method} --> ${rurl}`)
   const { url } = query
   const result = await extract(url)
-  return res.json(result)
+  // return res.json(result)
+  return res.send(result.data.content)
 }
