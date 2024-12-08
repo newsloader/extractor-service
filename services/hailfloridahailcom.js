@@ -15,6 +15,7 @@ import {
 const cache = register('hailflorida-article', ARTICLE_CACHE_TTL)
 
 const DEFAULT_TIMEOUT = 2 * 6e4
+const TWITTER_TYPE = '__TWITTER_TYPE__'
 
 // Common text patterns to filter out
 const blocking = [
@@ -82,24 +83,6 @@ const findImage = (doc) => {
   }
 }
 
-// const findAuthorInfo = (doc) => {
-//   const authorInfo =
-//     doc.querySelector('[itemtype*="Person"]')?.textContent?.trim() ||
-//     getMetaContent(doc, 'author') ||
-//     doc.querySelector('[rel="author"]')?.textContent?.trim() ||
-//     doc.querySelector('.author, .byline')?.textContent?.trim() ||
-//     ''
-
-//   const publishDate =
-//     doc.querySelector('time')?.getAttribute('datetime') ||
-//     getMetaContent(doc, 'published_time') ||
-//     getMetaContent(doc, 'date') ||
-//     doc.querySelector('[itemprop="datePublished"]')?.getAttribute('content') ||
-//     ''
-
-//   return { author: authorInfo, publishDate }
-// }
-
 const extractTwitterEmbeds = (doc) => {
   const twitterEmbeds = []
 
@@ -141,18 +124,31 @@ const getArticleContent = (doc) => {
   // Clone the content to avoid modifying original
   const contentClone = mainContent.cloneNode(true)
 
-  // Remove Twitter embeds from content
-  contentClone
-    .querySelectorAll('.twitter-tweet, [data-tweet-id], iframe[src*="twitter"], blockquote[class*="twitter"]')
-    .forEach((el) => el.parentNode?.removeChild(el))
-
   // Find all content paragraphs
-  const contentElements = contentClone.querySelectorAll('p[data-mm-id], h2[data-mm-id], h3[data-mm-id], h4[data-mm-id]')
+  const contentElements = contentClone.querySelectorAll(
+    'p[data-mm-id], h2[data-mm-id], h3[data-mm-id], h4[data-mm-id], blockquote.twitter-tweet'
+  )
 
   let hasFoundContent = false
   contentElements.forEach((el) => {
     const text = el.textContent.trim()
     const tagName = el.tagName.toLowerCase()
+    const className = el.className.toLowerCase()
+
+    if (className.includes('twitter-tweet')) {
+      const tweetText = el.querySelector('p')?.textContent?.trim()
+      // Get links from blockquote
+      const links1 = el.querySelectorAll('a')
+      const tweetUrl = links1[links1.length - 1]?.getAttribute('href')
+      if (tweetText) {
+        textBlocks.push({
+          type: TWITTER_TYPE,
+          text: tweetText,
+          url: tweetUrl || '', // Fallback to empty string if no URL found
+        })
+      }
+      return
+    }
 
     // Skip empty or too short content
     if (!text || text.length < 10) return
@@ -213,17 +209,20 @@ const parse = async (html) => {
   const description = findDescription(doc)
   const { url: imageUrl } = findImage(doc)
   // const { author, publishDate } = findAuthorInfo(doc)
-  const { textBlocks, twitterEmbeds } = getArticleContent(doc)
+  const { textBlocks } = getArticleContent(doc)
 
   // Generate HTML content
   const content = textBlocks
     .map((block) => {
+      if (block.type === TWITTER_TYPE) {
+        return `<p class="media"><p>${block.url}</p></p>`
+      }
       return `<${block.type}>${block.content}</${block.type}>`
     })
     .join('\n')
 
   // Generate plain text for summary
-  const text = textBlocks.map((block) => block.content).join(' ')
+  const text = textBlocks.map((block) => block.type !== TWITTER_TYPE ? block.content : '').join(' ')
 
   // Create appropriate length summary
   const desLen = description.length
@@ -242,9 +241,6 @@ const parse = async (html) => {
     image: imageUrl,
     summary,
     content,
-    metadata: {
-      twitterEmbeds,
-    },
   }
 }
 
