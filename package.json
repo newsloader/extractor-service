@@ -10,7 +10,7 @@
   "type": "module",
   "scripts": {
     "start": "ENV=live node ./extractor.js",
-    "dev": "ENV=dev nodemon ./extractor.js",
+    "dev": "ENV=dev command -v nodemon >/dev/null 2>&1 && nodemon ./extractor.js || node ./extractor.js",
     "lint": "eslint .",
     "lint:fix": "eslint --fix ."
   },
