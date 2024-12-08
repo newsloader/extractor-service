@@ -23,6 +23,15 @@ const BLOCK_WORDS = [
   'click here for',
   'sactown sports',
   'thank you for watching',
+  'read more below',
+]
+
+const NEEDED_WORDS = [
+  'coverage from',
+]
+
+const REMOVE_WORDS = [
+  'from Sactown Sports',
 ]
 
 const IG_URL = 'instagram.com'
@@ -31,7 +40,8 @@ const YOUTUBE_URL = 'youtube.com'
 
 const cache = register('sactownsports-article', ARTICLE_CACHE_TTL)
 const DEFAULT_TIMEOUT = 2 * 6e4
-const SEPARATOR = '{{MULTIMEDIA}}'
+const MULTIMEDIA_SEPARATOR = '{{MULTIMEDIA}}'
+const H3_TAG_SEPARATOR = '{{H3_TAG_SEPARATOR}}'
 
 const parse = async (html) => {
   const doc = new DOMParser().parseFromString(html, 'text/html')
@@ -39,6 +49,7 @@ const parse = async (html) => {
   const { url, title, description, image } = extractMetadata(doc)
   const textBlocks = []
   const mediaEmbeds = []
+  const h3Tags = []
   let paragraphs = []
 
   const storyBody = doc.querySelector('div.story_body')
@@ -47,21 +58,24 @@ const parse = async (html) => {
       const tagName = node.nodeName
       const txt = node.textContent.trim()
 
-      if (BLOCK_WORDS.some(word => txt.toLowerCase().includes(word))) {
+      if (BLOCK_WORDS.some(word => txt.toLowerCase().includes(word)) &&
+        !NEEDED_WORDS.some(word => txt.toLowerCase().includes(word))) {
         continue
       }
 
       switch (tagName) {
         case 'P':
         case 'UL':
-        case 'H3':
           paragraphs.push(txt)
           break
+        case 'H3':
+          paragraphs = processH3Tags({ node, h3Tags, paragraphs, textBlocks })
+          break
         case 'BLOCKQUOTE':
-          paragraphs = processBlockquote({ node, paragraphs, textBlocks, mediaEmbeds })
+          paragraphs = processMediaLinks({ node, paragraphs, textBlocks, mediaEmbeds, tagNameHasHref: 'a' })
           break
         case 'NOSCRIPT':
-          paragraphs = processNoscript({ node, paragraphs, textBlocks, mediaEmbeds })
+          paragraphs = processMediaLinks({ node, paragraphs, textBlocks, mediaEmbeds, tagNameHasHref: 'iframe' })
           break
         default:
           break
@@ -73,9 +87,10 @@ const parse = async (html) => {
     textBlocks.push(paragraphs.join(' '))
   }
 
-  const text = textBlocks.filter(x => x !== SEPARATOR).map(line => line.trim()).join(' ')
-  const content = generateContent(textBlocks, mediaEmbeds)
+  const text = textBlocks.filter(x => ![MULTIMEDIA_SEPARATOR, H3_TAG_SEPARATOR].includes(x))
+    .map(line => line.trim()).join(' ')
 
+  const content = generateContent(textBlocks, mediaEmbeds, h3Tags)
   const summary = generateSummary(description, text)
 
   return {
@@ -87,10 +102,24 @@ const parse = async (html) => {
   }
 }
 
-const processBlockquote = ({ node, paragraphs, textBlocks, mediaEmbeds }) => {
-  node.querySelectorAll('a').forEach((atag) => {
-    const href = atag.getAttribute('href')
-    if (href && (href.includes(TWITTER_URL) || href.includes(IG_URL))) {
+const processH3Tags = ({ node, h3Tags, paragraphs, textBlocks }) => {
+  textBlocks.push(paragraphs.join(' '))
+  textBlocks.push(H3_TAG_SEPARATOR)
+  const txt = node.textContent.trim()
+  if (txt.length > 0) {
+    h3Tags.push(txt.replace(REMOVE_WORDS.join('|'), ''))
+  }
+  paragraphs = []
+  return paragraphs
+}
+
+const processMediaLinks = ({ node, paragraphs, textBlocks, mediaEmbeds, tagNameHasHref = 'a' }) => {
+  const attrName = tagNameHasHref === 'a' ? 'href' : 'src'
+
+  node.querySelectorAll(tagNameHasHref).forEach((atag) => {
+    const href = atag.getAttribute(attrName)
+
+    if (href && (href.includes(TWITTER_URL) || href.includes(IG_URL) || href.includes(YOUTUBE_URL))) {
       const mediaLink = href.split('?')[0]
       if (paragraphs.length > 0) {
         textBlocks.push(paragraphs.join(' '))
@@ -98,35 +127,26 @@ const processBlockquote = ({ node, paragraphs, textBlocks, mediaEmbeds }) => {
       }
       if (isValidUrl(href)) {
         mediaEmbeds.push(mediaLink)
-        textBlocks.push(SEPARATOR)
+        textBlocks.push(MULTIMEDIA_SEPARATOR)
       }
     }
   })
   return paragraphs
 }
 
-const processNoscript = ({ node, paragraphs, textBlocks, mediaEmbeds }) => {
-  const mediaLink = node.querySelector('iframe')?.getAttribute('src')
-
-  if (mediaLink && mediaLink.includes(YOUTUBE_URL)) {
-    if (paragraphs.length > 0) {
-      textBlocks.push(paragraphs.join(' '))
-      paragraphs = []
-    }
-    if (isValidUrl(mediaLink)) {
-      mediaEmbeds.push(mediaLink)
-      textBlocks.push(SEPARATOR)
-    }
-  }
-  return paragraphs
+const generateContent = (textBlocks, mediaEmbeds, h3Tags) => {
+  return textBlocks.map((block) => generateBlockHTML(block, mediaEmbeds, h3Tags)).join('\n')
 }
 
-const generateContent = (textBlocks, mediaEmbeds) => {
-  return textBlocks.map((block) => {
-    return block === SEPARATOR
-      ? `<p class="media">${mediaEmbeds.shift()}</p>`
-      : `<p class="text">${block.trim()}</p>`
-  }).join('\n')
+const generateBlockHTML = (block, mediaEmbeds, h3Tags) => {
+  switch (block) {
+    case MULTIMEDIA_SEPARATOR:
+      return `<p class="media">${mediaEmbeds.shift()}</p>`
+    case H3_TAG_SEPARATOR:
+      return `<h3>${h3Tags.shift()}</h3>`
+    default:
+      return `<p class="text">${block.trim()}</p>`
+  }
 }
 
 const generateSummary = (description, text) => {
