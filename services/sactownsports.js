@@ -22,7 +22,12 @@ const BLOCK_WORDS = [
   'full interview',
   'click here for',
   'sactown sports',
+  'thank you for watching',
 ]
+
+const IG_URL = 'instagram.com'
+const TWITTER_URL = '/status/'
+const YOUTUBE_URL = 'youtube.com'
 
 const cache = register('sactownsports-article', ARTICLE_CACHE_TTL)
 const DEFAULT_TIMEOUT = 2 * 6e4
@@ -85,8 +90,8 @@ const parse = async (html) => {
 const processBlockquote = ({ node, paragraphs, textBlocks, mediaEmbeds }) => {
   node.querySelectorAll('a').forEach((atag) => {
     const href = atag.getAttribute('href')
-    if (href && href.includes('/status/')) {
-      const mediaLink = href.split('?ref_src=')[0]
+    if (href && (href.includes(TWITTER_URL) || href.includes(IG_URL))) {
+      const mediaLink = href.split('?')[0]
       if (paragraphs.length > 0) {
         textBlocks.push(paragraphs.join(' '))
         paragraphs = []
@@ -103,7 +108,7 @@ const processBlockquote = ({ node, paragraphs, textBlocks, mediaEmbeds }) => {
 const processNoscript = ({ node, paragraphs, textBlocks, mediaEmbeds }) => {
   const mediaLink = node.querySelector('iframe')?.getAttribute('src')
 
-  if (mediaLink && mediaLink.includes('youtube.com')) {
+  if (mediaLink && mediaLink.includes(YOUTUBE_URL)) {
     if (paragraphs.length > 0) {
       textBlocks.push(paragraphs.join(' '))
       paragraphs = []
