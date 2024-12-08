@@ -113,8 +113,11 @@ const processH3Tags = ({ node, h3Tags, paragraphs, textBlocks }) => {
 }
 
 const processMediaLinks = ({ node, paragraphs, textBlocks, mediaEmbeds, tagNameHasHref = 'a' }) => {
+  const attrName = tagNameHasHref === 'a' ? 'href' : 'src'
+
   node.querySelectorAll(tagNameHasHref).forEach((atag) => {
-    const href = atag.getAttribute('href')
+    const href = atag.getAttribute(attrName)
+
     if (href && (href.includes(TWITTER_URL) || href.includes(IG_URL) || href.includes(YOUTUBE_URL))) {
       const mediaLink = href.split('?')[0]
       if (paragraphs.length > 0) {
